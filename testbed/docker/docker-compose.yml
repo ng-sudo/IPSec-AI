@@ -1,0 +1,218 @@
+# =============================================================================
+# docker-compose.yml — PS 26160 IPSecAI Testbed
+# =============================================================================
+# Two-peer IPsec testbed topology using Docker Compose.
+#
+# Topology:
+#
+#   peer_left (initiator)          peer_right (responder)
+#   ┌─────────────────────┐        ┌─────────────────────┐
+#   │  172.20.0.10        │        │  172.20.0.20        │
+#   │  fd10::10           │        │  fd10::20           │
+#   │  PEER_ROLE=left     │◄──────►│  PEER_ROLE=right    │
+#   │  NET_ADMIN          │        │  NET_ADMIN          │
+#   └─────────────────────┘        └─────────────────────┘
+#              │                              │
+#              └──────────ipsecai_net─────────┘
+#                    172.20.0.0/24
+#                    fd10::/64
+#
+# Usage:
+#   # Build and start both peers
+#   docker-compose up --build
+#
+#   # Run a specific scenario
+#   SCENARIO_ID=scen_01_tunnel_aes128cbc_sha256_dh14_pfs_ipv4 docker-compose up
+#
+#   # Run in detached mode
+#   docker-compose up -d
+#
+#   # View logs
+#   docker-compose logs -f peer_left
+#
+#   # Execute commands in a peer
+#   docker-compose exec peer_left ip xfrm state
+#   docker-compose exec peer_left swanctl --list-sas
+#
+#   # Stop and clean up
+#   docker-compose down
+#
+# Requirements:
+#   - Docker Engine >= 20.10
+#   - Docker Compose >= 2.0
+#   - Linux host kernel (for IPsec XFRM support)
+#   - NET_ADMIN capability (granted below)
+# =============================================================================
+
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  ipsecai_net:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.20.0.0/24"
+          gateway: "172.20.0.1"
+        - subnet: "fd10::/64"
+          gateway: "fd10::1"
+    driver_opts:
+      # Disable bridge-level filtering so IPsec packets pass through
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  # Shared generated configs (rendered by render_configs.py on host)
+  generated_configs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${PWD}/../configs/generated"
+
+  # Shared PCAP output directory
+  pcap_output:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${PWD}/../../dataset/raw"
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+services:
+
+  # -------------------------------------------------------------------------
+  # peer_left — IKE initiator
+  # -------------------------------------------------------------------------
+  peer_left:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.peer
+    image: ipsecai-peer:latest
+    container_name: ipsecai_peer_left
+    hostname: peer-left
+
+    # Environment
+    environment:
+      PEER_ROLE:    "left"
+      PEER_IP:      "172.20.0.10"
+      REMOTE_IP:    "172.20.0.20"
+      SCENARIO_ID:  "${SCENARIO_ID:-}"
+      # Logging
+      CHARON_LOG_LEVEL: "2"
+
+    # Network configuration
+    networks:
+      ipsecai_net:
+        ipv4_address: "172.20.0.10"
+        ipv6_address: "fd10::10"
+
+    # Capabilities required for IPsec
+    cap_add:
+      - NET_ADMIN       # Required for ip xfrm, network namespace operations
+      - NET_RAW         # Required for raw socket access (tcpdump)
+      - SYS_MODULE      # Required for modprobe (kernel module loading)
+
+    # Security options
+    security_opt:
+      - no-new-privileges:false   # strongSwan needs to set capabilities
+
+    # Sysctls for IPsec
+    sysctls:
+      net.ipv4.ip_forward:              1
+      net.ipv6.conf.all.forwarding:     1
+      net.ipv6.conf.all.disable_ipv6:   0
+      net.ipv4.conf.all.rp_filter:      0
+      net.ipv4.conf.default.rp_filter:  0
+
+    # Volumes
+    volumes:
+      - generated_configs:/opt/ipsecai/testbed/configs/generated
+      - pcap_output:/opt/ipsecai/dataset/raw
+      - /var/log/ipsecai/peer_left:/var/log/ipsecai
+
+    # Ports (IKE + NAT-T)
+    ports:
+      - "500:500/udp"
+      - "4500:4500/udp"
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Dependency
+    depends_on:
+      peer_right:
+        condition: service_started
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "ip xfrm state list | grep -q 'proto esp' || swanctl --list-sas 2>/dev/null | grep -q 'ESTABLISHED'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  # -------------------------------------------------------------------------
+  # peer_right — IKE responder
+  # -------------------------------------------------------------------------
+  peer_right:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.peer
+    image: ipsecai-peer:latest
+    container_name: ipsecai_peer_right
+    hostname: peer-right
+
+    # Environment
+    environment:
+      PEER_ROLE:    "right"
+      PEER_IP:      "172.20.0.20"
+      REMOTE_IP:    "172.20.0.10"
+      SCENARIO_ID:  "${SCENARIO_ID:-}"
+      CHARON_LOG_LEVEL: "2"
+
+    # Network configuration
+    networks:
+      ipsecai_net:
+        ipv4_address: "172.20.0.20"
+        ipv6_address: "fd10::20"
+
+    # Capabilities
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_MODULE
+
+    security_opt:
+      - no-new-privileges:false
+
+    sysctls:
+      net.ipv4.ip_forward:              1
+      net.ipv6.conf.all.forwarding:     1
+      net.ipv6.conf.all.disable_ipv6:   0
+      net.ipv4.conf.all.rp_filter:      0
+      net.ipv4.conf.default.rp_filter:  0
+
+    # Volumes
+    volumes:
+      - generated_configs:/opt/ipsecai/testbed/configs/generated
+      - pcap_output:/opt/ipsecai/dataset/raw
+      - /var/log/ipsecai/peer_right:/var/log/ipsecai
+
+    # Restart policy
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "ip xfrm state list | grep -q 'proto esp' || swanctl --list-sas 2>/dev/null | grep -q 'ESTABLISHED'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s

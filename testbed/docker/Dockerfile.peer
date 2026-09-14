@@ -1,0 +1,142 @@
+# =============================================================================
+# Dockerfile.peer — PS 26160 IPSecAI Testbed
+# =============================================================================
+# Multi-stage Dockerfile for an IPsec peer node.
+# Based on Ubuntu 22.04 LTS (Jammy).
+#
+# Installs:
+#   - strongSwan (IKEv1/IKEv2 daemon + swanctl)
+#   - iproute2 (ip, ip xfrm)
+#   - tcpdump + tshark (packet capture)
+#   - iperf3 (bulk traffic generation)
+#   - curl + netcat (TCP/UDP traffic generation)
+#   - Python 3 + Jinja2 + PyYAML + jsonschema + scapy (config rendering + validation)
+#
+# Usage:
+#   docker build -f Dockerfile.peer -t ipsecai-peer:latest .
+#   docker-compose up  (preferred — see docker-compose.yml)
+#
+# Environment variables:
+#   PEER_ROLE       — "left" (initiator) or "right" (responder)
+#   SCENARIO_ID     — scenario ID to auto-deploy on startup (optional)
+#   PEER_IP         — IP address of this peer
+#   REMOTE_IP       — IP address of the remote peer
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: base — OS packages
+# ---------------------------------------------------------------------------
+FROM ubuntu:22.04 AS base
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Update and install system packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # IPsec daemon
+    strongswan \
+    strongswan-swanctl \
+    charon-systemd \
+    libcharon-extra-plugins \
+    libstrongswan-extra-plugins \
+    libstrongswan-standard-plugins \
+    # Network tools
+    iproute2 \
+    iputils-ping \
+    net-tools \
+    # Packet capture
+    tcpdump \
+    tshark \
+    # Traffic generation
+    iperf3 \
+    curl \
+    netcat-openbsd \
+    # Kernel module tools
+    kmod \
+    # Python 3
+    python3 \
+    python3-pip \
+    python3-venv \
+    # Utilities
+    jq \
+    vim-tiny \
+    procps \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# Stage 2: python-deps — install Python packages
+# ---------------------------------------------------------------------------
+FROM base AS python-deps
+
+# Install Python dependencies for testbed scripts
+COPY ../requirements.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# ---------------------------------------------------------------------------
+# Stage 3: final — assemble the peer image
+# ---------------------------------------------------------------------------
+FROM python-deps AS final
+
+# Create directory structure
+RUN mkdir -p \
+    /opt/ipsecai/testbed \
+    /opt/ipsecai/dataset/raw \
+    /var/log/ipsecai \
+    /etc/swanctl/conf.d \
+    /etc/ipsec.d/{private,certs,cacerts,crls} \
+    /tmp/ipsecai
+
+# Copy testbed files
+COPY .. /opt/ipsecai/testbed/
+
+# Copy entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Make scripts executable
+RUN find /opt/ipsecai/testbed/scripts -name "*.sh" -exec chmod +x {} \; && \
+    find /opt/ipsecai/testbed/validate -name "*.sh" -exec chmod +x {} \;
+
+# Set working directory
+WORKDIR /opt/ipsecai/testbed
+
+# ---------------------------------------------------------------------------
+# Environment defaults
+# ---------------------------------------------------------------------------
+ENV PEER_ROLE="left"
+ENV SCENARIO_ID=""
+ENV PEER_IP="172.20.0.10"
+ENV REMOTE_IP="172.20.0.20"
+ENV PYTHONPATH="/opt/ipsecai/testbed/scripts"
+ENV PATH="/opt/ipsecai/testbed/scripts:${PATH}"
+
+# ---------------------------------------------------------------------------
+# Expose ports
+# ---------------------------------------------------------------------------
+# IKE (UDP 500) + NAT-T (UDP 4500)
+EXPOSE 500/udp 4500/udp
+
+# iperf3 server port
+EXPOSE 5201/tcp 5201/udp
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+# Mount generated configs and PCAP output from host
+VOLUME ["/opt/ipsecai/testbed/configs/generated", "/opt/ipsecai/dataset/raw"]
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+    CMD swanctl --list-sas 2>/dev/null | grep -q "." || \
+        ip xfrm state list 2>/dev/null | grep -q "proto esp" || \
+        echo "strongSwan not yet established"
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["tail", "-f", "/var/log/ipsecai/charon.log"]

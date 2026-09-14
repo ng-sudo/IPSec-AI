@@ -1,0 +1,447 @@
+# =============================================================================
+# PS 26160 — IPSecAI  |  Master Scenario Definitions
+# =============================================================================
+# This file is the single source of truth for all testbed scenarios.
+# render_configs.py reads this file, validates it against schema.yaml, and
+# renders per-scenario strongSwan configuration files into configs/generated/.
+#
+# Dimensions covered (PS-required):
+#   mode          : tunnel | transport
+#   encryption    : aes128cbc | aes256cbc | aes128gcm16 | aes256gcm16
+#   integrity     : sha256 | sha384 | sha512 | (none — implicit in AEAD)
+#   dh_group      : modp2048 (DH14) | ecp256 (DH19) | ecp384 (DH20)
+#   pfs           : true | false
+#   ip_version    : 4 | 6
+#   ike_version   : 2  (IKEv1 legacy scenarios use ike_version: 1)
+#   traffic_types : [icmp, tcp, udp, iperf]
+# =============================================================================
+
+scenarios:
+
+  # ---------------------------------------------------------------------------
+  # Group 1: Tunnel mode — AES-CBC + HMAC — IPv4
+  # ---------------------------------------------------------------------------
+
+  - id: scen_01_tunnel_aes128cbc_sha256_dh14_pfs_ipv4
+    name: "Tunnel / AES-128-CBC / SHA-256 / DH14 / PFS / IPv4"
+    description: >
+      Baseline IKEv2 tunnel mode with AES-128-CBC encryption, SHA-256 integrity,
+      MODP-2048 (DH group 14) key exchange, PFS enabled, over IPv4.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes128cbc
+    integrity: sha256
+    prf: sha256
+    dh_group: modp2048
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    tags: [baseline, aes-cbc, pfs, ipv4, tunnel]
+
+  - id: scen_02_tunnel_aes256cbc_sha256_dh14_pfs_ipv4
+    name: "Tunnel / AES-256-CBC / SHA-256 / DH14 / PFS / IPv4"
+    description: >
+      IKEv2 tunnel mode with AES-256-CBC encryption, SHA-256 integrity,
+      MODP-2048 (DH group 14) key exchange, PFS enabled, over IPv4.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes256cbc
+    integrity: sha256
+    prf: sha256
+    dh_group: modp2048
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    tags: [aes256, aes-cbc, pfs, ipv4, tunnel]
+
+  - id: scen_03_tunnel_aes256cbc_sha384_dh19_pfs_ipv4
+    name: "Tunnel / AES-256-CBC / SHA-384 / DH19 / PFS / IPv4"
+    description: >
+      IKEv2 tunnel mode with AES-256-CBC encryption, SHA-384 integrity,
+      ECP-256 (DH group 19) key exchange, PFS enabled, over IPv4.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes256cbc
+    integrity: sha384
+    prf: sha384
+    dh_group: ecp256
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, iperf]
+    capture_duration: 90
+    tags: [aes256, aes-cbc, ecp256, dh19, pfs, ipv4, tunnel]
+
+  - id: scen_04_tunnel_aes256cbc_sha512_dh20_pfs_ipv4
+    name: "Tunnel / AES-256-CBC / SHA-512 / DH20 / PFS / IPv4"
+    description: >
+      IKEv2 tunnel mode with AES-256-CBC encryption, SHA-512 integrity,
+      ECP-384 (DH group 20) key exchange, PFS enabled, over IPv4.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes256cbc
+    integrity: sha512
+    prf: sha512
+    dh_group: ecp384
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, iperf]
+    capture_duration: 90
+    tags: [aes256, aes-cbc, ecp384, dh20, pfs, ipv4, tunnel]
+
+  # ---------------------------------------------------------------------------
+  # Group 2: Tunnel mode — AES-GCM (AEAD) — IPv4
+  # ---------------------------------------------------------------------------
+
+  - id: scen_05_tunnel_aes128gcm_dh14_pfs_ipv4
+    name: "Tunnel / AES-128-GCM-16 / DH14 / PFS / IPv4"
+    description: >
+      IKEv2 tunnel mode with AES-128-GCM-16 AEAD encryption (no separate
+      integrity algorithm), MODP-2048 (DH group 14) key exchange, PFS enabled,
+      over IPv4.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes128gcm16
+    integrity: null          # AEAD — integrity is implicit
+    prf: sha256
+    dh_group: modp2048
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp, iperf]
+    capture_duration: 90
+    tags: [aes-gcm, aead, pfs, ipv4, tunnel]
+
+  - id: scen_06_tunnel_aes256gcm_dh19_pfs_ipv4
+    name: "Tunnel / AES-256-GCM-16 / DH19 / PFS / IPv4"
+    description: >
+      IKEv2 tunnel mode with AES-256-GCM-16 AEAD encryption,
+      ECP-256 (DH group 19) key exchange, PFS enabled, over IPv4.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes256gcm16
+    integrity: null
+    prf: sha256
+    dh_group: ecp256
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp, iperf]
+    capture_duration: 90
+    tags: [aes256, aes-gcm, aead, ecp256, dh19, pfs, ipv4, tunnel]
+
+  - id: scen_07_tunnel_aes256gcm_dh20_pfs_ipv4
+    name: "Tunnel / AES-256-GCM-16 / DH20 / PFS / IPv4"
+    description: >
+      IKEv2 tunnel mode with AES-256-GCM-16 AEAD encryption,
+      ECP-384 (DH group 20) key exchange, PFS enabled, over IPv4.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes256gcm16
+    integrity: null
+    prf: sha384
+    dh_group: ecp384
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp, iperf]
+    capture_duration: 90
+    tags: [aes256, aes-gcm, aead, ecp384, dh20, pfs, ipv4, tunnel]
+
+  # ---------------------------------------------------------------------------
+  # Group 3: Tunnel mode — PFS disabled — IPv4
+  # ---------------------------------------------------------------------------
+
+  - id: scen_08_tunnel_aes128cbc_sha256_dh14_nopfs_ipv4
+    name: "Tunnel / AES-128-CBC / SHA-256 / DH14 / No-PFS / IPv4"
+    description: >
+      IKEv2 tunnel mode with AES-128-CBC, SHA-256, MODP-2048, PFS DISABLED.
+      Demonstrates the security difference vs. PFS-enabled scenarios.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes128cbc
+    integrity: sha256
+    prf: sha256
+    dh_group: modp2048
+    pfs: false
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    tags: [aes128, aes-cbc, no-pfs, ipv4, tunnel]
+
+  - id: scen_09_tunnel_aes256gcm_dh14_nopfs_ipv4
+    name: "Tunnel / AES-256-GCM-16 / DH14 / No-PFS / IPv4"
+    description: >
+      IKEv2 tunnel mode with AES-256-GCM-16 AEAD, MODP-2048, PFS DISABLED.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes256gcm16
+    integrity: null
+    prf: sha256
+    dh_group: modp2048
+    pfs: false
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, iperf]
+    capture_duration: 60
+    tags: [aes256, aes-gcm, aead, no-pfs, ipv4, tunnel]
+
+  # ---------------------------------------------------------------------------
+  # Group 4: Transport mode — IPv4
+  # ---------------------------------------------------------------------------
+
+  - id: scen_10_transport_aes128cbc_sha256_dh14_pfs_ipv4
+    name: "Transport / AES-128-CBC / SHA-256 / DH14 / PFS / IPv4"
+    description: >
+      IKEv2 transport mode with AES-128-CBC, SHA-256, MODP-2048, PFS enabled,
+      over IPv4. Transport mode protects only the payload (no outer IP header).
+    mode: transport
+    ike_version: 2
+    encryption: aes128cbc
+    integrity: sha256
+    prf: sha256
+    dh_group: modp2048
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: null        # transport mode — no subnet encapsulation
+    right_subnet: null
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    tags: [aes128, aes-cbc, pfs, ipv4, transport]
+
+  - id: scen_11_transport_aes256cbc_sha256_dh19_pfs_ipv4
+    name: "Transport / AES-256-CBC / SHA-256 / DH19 / PFS / IPv4"
+    description: >
+      IKEv2 transport mode with AES-256-CBC, SHA-256, ECP-256 (DH19),
+      PFS enabled, over IPv4.
+    mode: transport
+    ike_version: 2
+    encryption: aes256cbc
+    integrity: sha256
+    prf: sha256
+    dh_group: ecp256
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: null
+    right_subnet: null
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    tags: [aes256, aes-cbc, ecp256, dh19, pfs, ipv4, transport]
+
+  - id: scen_12_transport_aes128gcm_dh14_pfs_ipv4
+    name: "Transport / AES-128-GCM-16 / DH14 / PFS / IPv4"
+    description: >
+      IKEv2 transport mode with AES-128-GCM-16 AEAD, MODP-2048, PFS enabled,
+      over IPv4. Requires kernel >= 5.x for GCM in transport mode on some distros.
+    mode: transport
+    ike_version: 2
+    encryption: aes128gcm16
+    integrity: null
+    prf: sha256
+    dh_group: modp2048
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: null
+    right_subnet: null
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    min_kernel: "5.0"
+    tags: [aes-gcm, aead, pfs, ipv4, transport]
+
+  - id: scen_13_transport_aes256gcm_dh20_pfs_ipv4
+    name: "Transport / AES-256-GCM-16 / DH20 / PFS / IPv4"
+    description: >
+      IKEv2 transport mode with AES-256-GCM-16 AEAD, ECP-384 (DH20),
+      PFS enabled, over IPv4. Requires kernel >= 5.x.
+    mode: transport
+    ike_version: 2
+    encryption: aes256gcm16
+    integrity: null
+    prf: sha384
+    dh_group: ecp384
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: null
+    right_subnet: null
+    auth_method: psk
+    traffic_types: [icmp, tcp, iperf]
+    capture_duration: 60
+    min_kernel: "5.0"
+    tags: [aes256, aes-gcm, aead, ecp384, dh20, pfs, ipv4, transport]
+
+  # ---------------------------------------------------------------------------
+  # Group 5: IPv6 scenarios — Tunnel mode
+  # ---------------------------------------------------------------------------
+
+  - id: scen_14_tunnel_aes128cbc_sha256_dh14_pfs_ipv6
+    name: "Tunnel / AES-128-CBC / SHA-256 / DH14 / PFS / IPv6"
+    description: >
+      IKEv2 tunnel mode with AES-128-CBC, SHA-256, MODP-2048, PFS enabled,
+      over IPv6. Tests ESP6 kernel path.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes128cbc
+    integrity: sha256
+    prf: sha256
+    dh_group: modp2048
+    pfs: true
+    ip_version: 6
+    left_ip: "fd00::1"
+    right_ip: "fd00::2"
+    left_subnet: "fd00::/64"
+    right_subnet: "fd00::/64"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    tags: [aes128, aes-cbc, pfs, ipv6, tunnel]
+
+  - id: scen_15_tunnel_aes256gcm_dh19_pfs_ipv6
+    name: "Tunnel / AES-256-GCM-16 / DH19 / PFS / IPv6"
+    description: >
+      IKEv2 tunnel mode with AES-256-GCM-16 AEAD, ECP-256 (DH19),
+      PFS enabled, over IPv6.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes256gcm16
+    integrity: null
+    prf: sha256
+    dh_group: ecp256
+    pfs: true
+    ip_version: 6
+    left_ip: "fd00::1"
+    right_ip: "fd00::2"
+    left_subnet: "fd00::/64"
+    right_subnet: "fd00::/64"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp, iperf]
+    capture_duration: 90
+    tags: [aes256, aes-gcm, aead, ecp256, dh19, pfs, ipv6, tunnel]
+
+  - id: scen_16_tunnel_aes256cbc_sha512_dh20_pfs_ipv6
+    name: "Tunnel / AES-256-CBC / SHA-512 / DH20 / PFS / IPv6"
+    description: >
+      IKEv2 tunnel mode with AES-256-CBC, SHA-512, ECP-384 (DH20),
+      PFS enabled, over IPv6.
+    mode: tunnel
+    ike_version: 2
+    encryption: aes256cbc
+    integrity: sha512
+    prf: sha512
+    dh_group: ecp384
+    pfs: true
+    ip_version: 6
+    left_ip: "fd00::1"
+    right_ip: "fd00::2"
+    left_subnet: "fd00::/64"
+    right_subnet: "fd00::/64"
+    auth_method: psk
+    traffic_types: [icmp, tcp, iperf]
+    capture_duration: 90
+    tags: [aes256, aes-cbc, ecp384, dh20, pfs, ipv6, tunnel]
+
+  # ---------------------------------------------------------------------------
+  # Group 6: IPv6 — Transport mode
+  # ---------------------------------------------------------------------------
+
+  - id: scen_17_transport_aes128gcm_dh14_pfs_ipv6
+    name: "Transport / AES-128-GCM-16 / DH14 / PFS / IPv6"
+    description: >
+      IKEv2 transport mode with AES-128-GCM-16 AEAD, MODP-2048, PFS enabled,
+      over IPv6. Tests ESP6 transport path.
+    mode: transport
+    ike_version: 2
+    encryption: aes128gcm16
+    integrity: null
+    prf: sha256
+    dh_group: modp2048
+    pfs: true
+    ip_version: 6
+    left_ip: "fd00::1"
+    right_ip: "fd00::2"
+    left_subnet: null
+    right_subnet: null
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    min_kernel: "5.0"
+    tags: [aes-gcm, aead, pfs, ipv6, transport]
+
+  # ---------------------------------------------------------------------------
+  # Group 7: IKEv1 legacy scenario (for comparison / ML training diversity)
+  # ---------------------------------------------------------------------------
+
+  - id: scen_18_tunnel_aes128cbc_sha256_dh14_pfs_ipv4_ikev1
+    name: "Tunnel / AES-128-CBC / SHA-256 / DH14 / PFS / IPv4 / IKEv1"
+    description: >
+      Legacy IKEv1 tunnel mode with AES-128-CBC, SHA-256, MODP-2048, PFS enabled,
+      over IPv4. Generates IKEv1 Main Mode + Quick Mode exchange traffic for
+      ML training diversity. Uses legacy ipsec.conf (not swanctl).
+    mode: tunnel
+    ike_version: 1
+    encryption: aes128cbc
+    integrity: sha256
+    prf: sha256
+    dh_group: modp2048
+    pfs: true
+    ip_version: 4
+    left_ip: "10.0.0.1"
+    right_ip: "10.0.0.2"
+    left_subnet: "10.0.0.0/24"
+    right_subnet: "10.0.0.0/24"
+    auth_method: psk
+    traffic_types: [icmp, tcp, udp]
+    capture_duration: 60
+    tags: [ikev1, legacy, aes128, aes-cbc, pfs, ipv4, tunnel]

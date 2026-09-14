@@ -1,0 +1,195 @@
+# =============================================================================
+# PS 26160 — IPSecAI  |  Scenario Schema (JSON Schema in YAML format)
+# =============================================================================
+# Used by testbed/scripts/render_configs.py to validate every entry in
+# scenarios.yaml before rendering any configuration files.
+#
+# Validation library: jsonschema (Python)
+# Usage:  jsonschema.validate(scenario_dict, schema_dict)
+# =============================================================================
+
+$schema: "http://json-schema.org/draft-07/schema#"
+title: IPSecAI Scenario
+description: >
+  Defines a single IPsec testbed scenario. Each scenario maps to a set of
+  strongSwan configuration files and a labeled PCAP capture.
+
+type: object
+
+required:
+  - id
+  - name
+  - description
+  - mode
+  - ike_version
+  - encryption
+  - prf
+  - dh_group
+  - pfs
+  - ip_version
+  - left_ip
+  - right_ip
+  - auth_method
+  - traffic_types
+  - capture_duration
+
+additionalProperties: false
+
+properties:
+
+  id:
+    type: string
+    description: >
+      Unique scenario identifier. Used as directory name under configs/generated/
+      and as PCAP filename prefix. Must match pattern: scen_NN_<descriptive_slug>.
+    pattern: "^scen_[0-9]{2}_[a-z0-9_]+$"
+    examples:
+      - scen_01_tunnel_aes128cbc_sha256_dh14_pfs_ipv4
+
+  name:
+    type: string
+    description: Human-readable scenario name (used in reports and logs).
+    minLength: 5
+    maxLength: 120
+
+  description:
+    type: string
+    description: >
+      Longer description of what this scenario tests and why it is included.
+    minLength: 10
+
+  mode:
+    type: string
+    description: IPsec encapsulation mode.
+    enum: [tunnel, transport]
+
+  ike_version:
+    type: integer
+    description: IKE protocol version. 2 = IKEv2 (preferred); 1 = IKEv1 (legacy).
+    enum: [1, 2]
+
+  encryption:
+    type: string
+    description: >
+      ESP encryption algorithm identifier (strongSwan notation).
+      AEAD algorithms (gcm) do not require a separate integrity algorithm.
+    enum:
+      - aes128cbc      # AES-128 in CBC mode
+      - aes256cbc      # AES-256 in CBC mode
+      - aes128gcm16    # AES-128-GCM with 16-byte ICV (AEAD)
+      - aes256gcm16    # AES-256-GCM with 16-byte ICV (AEAD)
+
+  integrity:
+    description: >
+      ESP integrity / authentication algorithm. Must be null for AEAD ciphers
+      (aes128gcm16, aes256gcm16). Required for CBC ciphers.
+    oneOf:
+      - type: "null"
+      - type: string
+        enum: [sha256, sha384, sha512, sha1]
+
+  prf:
+    type: string
+    description: >
+      Pseudo-random function used for IKE key derivation.
+      Must be compatible with the integrity algorithm when both are specified.
+    enum: [sha256, sha384, sha512, sha1]
+
+  dh_group:
+    type: string
+    description: >
+      Diffie-Hellman group for IKE and (when PFS=true) ESP key exchange.
+      modp2048 = DH group 14 (MODP-2048)
+      ecp256   = DH group 19 (ECP-256 / NIST P-256)
+      ecp384   = DH group 20 (ECP-384 / NIST P-384)
+    enum: [modp2048, ecp256, ecp384]
+
+  pfs:
+    type: boolean
+    description: >
+      Whether Perfect Forward Secrecy is enabled for Child SA rekeying.
+      When false, the Child SA DH group is omitted (no PFS).
+
+  ip_version:
+    type: integer
+    description: IP version for the outer (IKE + ESP) packets.
+    enum: [4, 6]
+
+  left_ip:
+    type: string
+    description: >
+      IP address of the left peer (initiator). IPv4 dotted-decimal or
+      IPv6 colon-hex notation.
+    examples:
+      - "10.0.0.1"
+      - "fd00::1"
+
+  right_ip:
+    type: string
+    description: >
+      IP address of the right peer (responder). IPv4 dotted-decimal or
+      IPv6 colon-hex notation.
+    examples:
+      - "10.0.0.2"
+      - "fd00::2"
+
+  left_subnet:
+    description: >
+      Protected subnet behind the left peer (tunnel mode only).
+      Must be null for transport mode.
+    oneOf:
+      - type: "null"
+      - type: string
+        description: CIDR notation, e.g. "10.0.0.0/24" or "fd00::/64"
+
+  right_subnet:
+    description: >
+      Protected subnet behind the right peer (tunnel mode only).
+      Must be null for transport mode.
+    oneOf:
+      - type: "null"
+      - type: string
+
+  auth_method:
+    type: string
+    description: >
+      IKE authentication method.
+      psk  = Pre-Shared Key (default for testbed simplicity)
+      cert = X.509 certificate (future extension)
+    enum: [psk, cert]
+
+  traffic_types:
+    type: array
+    description: >
+      List of traffic generators to run during the capture window.
+      At least one type must be specified.
+    minItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      enum: [icmp, tcp, udp, iperf]
+
+  capture_duration:
+    type: integer
+    description: Duration of the PCAP capture in seconds.
+    minimum: 10
+    maximum: 600
+
+  min_kernel:
+    type: string
+    description: >
+      Minimum Linux kernel version required for this scenario.
+      Absent means no special kernel requirement (>= 4.19 is always assumed).
+    pattern: "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+    examples:
+      - "5.0"
+      - "5.15"
+
+  tags:
+    type: array
+    description: >
+      Free-form tags for filtering and grouping scenarios.
+      Used by run_scenario.sh --tag filter.
+    items:
+      type: string
+    uniqueItems: true

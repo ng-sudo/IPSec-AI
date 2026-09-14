@@ -1,0 +1,26 @@
+# =============================================================================
+# testbed/configs/.gitignore
+# =============================================================================
+# Exclude the generated/ directory from version control.
+#
+# Reason: render_configs.py writes rendered strongSwan configuration files
+# into configs/generated/<scenario_id>/. These files contain:
+#   - Pre-Shared Keys (ipsec.secrets, swanctl.conf secrets block)
+#   - Host-specific paths
+#   - Scenario-specific runtime state
+#
+# The templates/ directory IS tracked (it contains no secrets).
+# The generated/ directory is NEVER tracked.
+# =============================================================================
+
+# Exclude all rendered scenario configs
+generated/
+
+# Exclude any accidentally created .pem / .key files
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Exclude charon log files if they end up here
+*.log
