@@ -43,6 +43,11 @@ NS_RIGHT="peer_right"
 CONFIG_ROOT_LEFT="/tmp/ipsecai/${NS_LEFT}"
 CONFIG_ROOT_RIGHT="/tmp/ipsecai/${NS_RIGHT}"
 
+CHARON_BIN="$(command -v charon 2>/dev/null || true)"
+if [[ -z "$CHARON_BIN" && -x "/usr/lib/ipsec/charon" ]]; then
+    CHARON_BIN="/usr/lib/ipsec/charon"
+fi
+
 SWANCTL_DIR="swanctl"          # relative to config root
 IPSEC_CONF="ipsec.conf"
 IPSEC_SECRETS="ipsec.secrets"
@@ -98,6 +103,12 @@ if [[ $EUID -ne 0 ]]; then
     log_error "This script must be run as root (or with sudo)."
     exit 1
 fi
+
+if [[ -z "$CHARON_BIN" || ! -x "$CHARON_BIN" ]]; then
+    log_error "charon daemon not found. Install strongswan-charon or set a valid charon path."
+    exit 2
+fi
+log_info "  charon binary: $CHARON_BIN"
 
 # ---------------------------------------------------------------------------
 # Validate scenario directory exists
@@ -160,7 +171,13 @@ deploy_to_namespace() {
     mkdir -p "${config_root}/ipsec.d/"{private,certs,cacerts,crls}
 
     # Copy configs
-    cp "${SCENARIO_DIR}/strongswan.conf" "${config_root}/${STRONGSWAN_CONF}"
+    # Network namespaces share the host filesystem, so each daemon needs a unique VICI socket.
+    sed "s#socket = /var/run/charon.vici#socket = ${config_root}/charon.vici#" \
+        "${SCENARIO_DIR}/strongswan.conf" > "${config_root}/${STRONGSWAN_CONF}"
+    # ip netns exec bind-mounts /etc/netns/<name>/strongswan.conf as /etc/strongswan.conf.
+    # Standalone charon reads /etc/strongswan.conf and does not honor STRONGSWAN_CONF.
+    mkdir -p "/etc/netns/${ns}"
+    cp "${config_root}/${STRONGSWAN_CONF}" "/etc/netns/${ns}/${STRONGSWAN_CONF}"
     cp "${SCENARIO_DIR}/ipsec.secrets"   "${config_root}/${IPSEC_SECRETS}"
     chmod 600 "${config_root}/${IPSEC_SECRETS}"
 
@@ -210,23 +227,28 @@ start_strongswan() {
             2>&1 | sed "s/^/  [$ns] /" &
     else
         # Modern mode: start charon directly, then load config via swanctl
+        local vici_socket="${config_root}/charon.vici"
         ip netns exec "$ns" \
-            charon \
-                --strongswan-conf "${config_root}/${STRONGSWAN_CONF}" \
+            "$CHARON_BIN" \
             &>/var/log/charon_${SCENARIO_ID}_${ns}.log &
         local charon_pid=$!
         log_info "  [$ns] charon started (PID $charon_pid)"
 
         # Wait for VICI socket to appear
-        local vici_socket="/var/run/charon.vici"
         local wait_count=0
         while [[ ! -S "$vici_socket" ]] && [[ $wait_count -lt 10 ]]; do
             sleep 1
-            ((wait_count++))
+            wait_count=$((wait_count + 1))
         done
 
         if [[ ! -S "$vici_socket" ]]; then
-            log_warn "  [$ns] VICI socket not found at $vici_socket — trying swanctl anyway"
+            log_error "  [$ns] VICI socket not found at $vici_socket"
+            log_error "  [$ns] charon startup log: /var/log/charon_${SCENARIO_ID}_${ns}.log"
+            if ! kill -0 "$charon_pid" 2>/dev/null; then
+                log_error "  [$ns] charon exited during startup"
+            fi
+            sed 's/^/    /' "/var/log/charon_${SCENARIO_ID}_${ns}.log" >&2 || true
+            return 3
         fi
 
         # Load configuration via swanctl
@@ -234,6 +256,7 @@ start_strongswan() {
             swanctl \
                 --load-all \
                 --file "${config_root}/${SWANCTL_DIR}/conf.d/${SCENARIO_ID}.conf" \
+                --uri "unix://${vici_socket}" \
             2>&1 | sed "s/^/  [$ns] /" || true
     fi
 

@@ -18,7 +18,7 @@ charon {
     # Log to a file for post-capture analysis.
     # Levels: -1=silent, 0=audit, 1=control, 2=diag, 3=raw, 4=private
     filelog {
-        /var/log/charon_{{ scenario.id }}.log {
+        "/var/log/charon_{{ scenario.id }}.log" {
             # Log all subsystems at diagnostic level for testbed captures
             default = 2
             # Per-subsystem overrides
